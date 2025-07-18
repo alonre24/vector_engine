@@ -1,38 +1,66 @@
-import faiss
 import pickle
 import pandas as pd
 import streamlit as st
 from sentence_transformers import SentenceTransformer
-from vector_engine.utils import vector_search
+from redisvl.query import VectorQuery
+from redisvl.index import SearchIndex
+from redis import Redis
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Redis connection configuration
+redis_client = Redis(host='localhost', port=6379, db=0)
 
 @st.cache
 def read_data(data="data/misinformation_papers.csv"):
     """Read the data from local."""
     return pd.read_csv(data)
 
-
 @st.cache(allow_output_mutation=True)
 def load_bert_model(name="distilbert-base-nli-stsb-mean-tokens"):
     """Instantiate a sentence-level DistilBERT model."""
     return SentenceTransformer(name)
 
-
 @st.cache(allow_output_mutation=True)
-def load_faiss_index(path_to_faiss="models/faiss_index.pickle"):
-    """Load and deserialize the Faiss index."""
-    with open(path_to_faiss, "rb") as h:
-        data = pickle.load(h)
-    return faiss.deserialize_index(data)
+def load_redis_index(index_name="misinformation_index"):
+    """Load the Redis index."""
+    try:
+        index = SearchIndex(redis_client, index_name)
+        logger.info("Redis index loaded successfully.")
+        return index
+    except Exception as e:
+        logger.error(f"Error loading Redis index: {e}")
+        raise
 
+def semantic_search(query: str, index: SearchIndex, vectorizer, filters=None):
+    """Perform semantic search using Redis."""
+    try:
+        query_vector = vectorizer.encode(query)
+        vector_query = VectorQuery(
+            vector=query_vector,
+            vector_field_name="text_embedding",
+            num_results=10,
+            return_fields=["content", "title", "metadata"],
+            return_score=True
+        )
+        if filters:
+            vector_query.set_filter(filters)
+        results = index.query(vector_query)
+        return results
+    except Exception as e:
+        logger.error(f"Error during semantic search: {e}")
+        return []
 
 def main():
     # Load data and models
     data = read_data()
     model = load_bert_model()
-    faiss_index = load_faiss_index()
+    redis_index = load_redis_index()
 
-    st.title("Vector-based searches with Sentence Transformers and Faiss")
+    st.title("Vector-based searches with Sentence Transformers and Redis")
 
     # User search
     user_input = st.text_area("Search box", "covid-19 misinformation and social media")
@@ -45,30 +73,20 @@ def main():
 
     # Fetch results
     if user_input:
-        # Get paper IDs
-        D, I = vector_search([user_input], model, faiss_index, num_results)
-        # Slice data on year
-        frame = data[
-            (data.year >= filter_year[0])
-            & (data.year <= filter_year[1])
-            & (data.citations >= filter_citations)
-        ]
-        # Get individual results
-        for id_ in I.flatten().tolist():
-            if id_ in set(frame.id):
-                f = frame[(frame.id == id_)]
-            else:
-                continue
-
+        filters = {
+            "year": {"$gte": filter_year[0], "$lte": filter_year[1]},
+            "citations": {"$gte": filter_citations}
+        }
+        results = semantic_search(user_input, redis_index, model, filters)
+        for result in results:
             st.write(
-                f"""**{f.iloc[0].original_title}**  
-            **Citations**: {f.iloc[0].citations}  
-            **Publication year**: {f.iloc[0].year}  
-            **Abstract**
-            {f.iloc[0].abstract}
-            """
+                f"""**{result['title']}**  
+                **Citations**: {result['metadata']['citations']}  
+                **Publication year**: {result['metadata']['year']}  
+                **Abstract**
+                {result['content']}
+                """
             )
-
 
 if __name__ == "__main__":
     main()

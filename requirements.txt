@@ -7,3 +7,5 @@ numpy==1.19.2
 folium==0.2.1
 streamlit==0.62.0
 -e .
+redis>=4.5.0
+redisvl>=0.6.0
