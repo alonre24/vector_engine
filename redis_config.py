@@ -1,8 +1,13 @@
-
-# Redis Configuration for Vector Similarity
 import os
+import logging
 from redisvl.utils.vectorize import HFTextVectorizer
 from redisvl.extensions.cache.embeddings import EmbeddingsCache
+from redisvl.extensions.llmcache import SemanticCache
+from functools import wraps
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Redis connection settings
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -32,3 +37,46 @@ VECTOR_DIMENSIONS = {
     "sentence-transformers/all-mpnet-base-v2": 768,
     "text-embedding-ada-002": 1536
 }
+
+# Setup semantic cache
+cache = SemanticCache(
+    name="llm_cache",
+    vectorizer=DEFAULT_VECTORIZER,
+    redis_url=REDIS_URL,
+    distance_threshold=0.1  # Adjust based on similarity requirements
+)
+
+# Cache decorator
+def semantic_cache_decorator(cache_instance):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Create cache key from function arguments
+            cache_key = f"{func.__name__}:{str(args)}:{str(kwargs)}"
+            
+            try:
+                # Try to get from cache
+                cached_result = cache_instance.check(cache_key)
+                if cached_result:
+                    logger.info(f"Cache hit for key: {cache_key}")
+                    return cached_result
+                
+                # Execute function and cache result
+                result = await func(*args, **kwargs)
+                cache_instance.store(cache_key, result)
+                logger.info(f"Cache store for key: {cache_key}")
+                return result
+            except Exception as e:
+                logger.error(f"Error during caching operation: {e}")
+                # Fallback to executing the function if cache fails
+                return await func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+@semantic_cache_decorator(cache)
+async def cached_llm_call(prompt: str, llm_client):
+    response = await llm_client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content

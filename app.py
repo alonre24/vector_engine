@@ -6,13 +6,53 @@ from redisvl.query import VectorQuery
 from redisvl.index import SearchIndex
 from redis import Redis
 import logging
+from redisvl.extensions.llmcache import SemanticCache
+from functools import wraps
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Redis connection configuration
-redis_client = Redis(host='localhost', port=6379, db=0)
+REDIS_URL = 'redis://localhost:6379/0'
+redis_client = Redis.from_url(REDIS_URL)
+
+# Setup semantic cache
+vectorizer = SentenceTransformer("distilbert-base-nli-stsb-mean-tokens")
+cache = SemanticCache(
+    name="llm_cache",
+    vectorizer=vectorizer,
+    redis_url=REDIS_URL,
+    distance_threshold=0.1  # Adjust based on similarity requirements
+)
+
+# Cache decorator
+def semantic_cache_decorator(cache_instance):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Create cache key from function arguments
+            cache_key = f"{func.__name__}:{str(args)}:{str(kwargs)}"
+            
+            # Try to get from cache
+            cached_result = cache_instance.check(cache_key)
+            if cached_result:
+                return cached_result
+            
+            # Execute function and cache result
+            result = await func(*args, **kwargs)
+            cache_instance.store(cache_key, result)
+            return result
+        return wrapper
+    return decorator
+
+@semantic_cache_decorator(cache)
+async def cached_llm_call(prompt: str, llm_client):
+    response = await llm_client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content
 
 @st.cache
 def read_data(data="data/misinformation_papers.csv"):

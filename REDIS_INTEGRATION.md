@@ -5,23 +5,28 @@ This document describes the Redis vector similarity integration that has been au
 
 ## Integration Summary
 
-- **Total opportunities identified**: 11
-- **Files modified**: 3
+- **Total opportunities identified**: 30
+- **Files modified**: 8
 - **New files created**: 6
-- **Integration types**: semantic_search, vector_similarity_replacement, semantic_caching, rag_systems, feature_stores
+- **Integration types**: vector_similarity_replacement, semantic_caching, semantic_search, rag_systems, feature_stores
 
 ## Modified Files
 
-- app.py: Integrated Redis semantic_search functionality
-- notebooks/001_vector_search.ipynb: Added Redis semantic_search integration cell to notebook
-- vector_engine/utils.py: Integrated Redis semantic_search functionality
+- app.py: Integrated Redis semantic_caching functionality
+- redis_config.py: Integrated Redis semantic_caching functionality
+- redis_semantic_caching_example.py: Integrated Redis semantic_caching functionality
+- redis_feature_stores_example.py: Integrated Redis semantic_caching functionality
+- redis_rag_systems_example.py: Integrated Redis semantic_caching functionality
+- redis_semantic_search_example.py: Integrated Redis semantic_caching functionality
+- notebooks/001_vector_search.ipynb: Added Redis semantic_caching integration cell to notebook
+- vector_engine/utils.py: Integrated Redis semantic_caching functionality
 
 ## New Files Created
 
 - redis_config.py: Redis connection and vectorizer configuration
-- redis_semantic_search_example.py: Example usage for Redis semantic_search integration
 - redis_vector_similarity_replacement_example.py: Example usage for Redis vector_similarity_replacement integration
 - redis_semantic_caching_example.py: Example usage for Redis semantic_caching integration
+- redis_semantic_search_example.py: Example usage for Redis semantic_search integration
 - redis_rag_systems_example.py: Example usage for Redis rag_systems integration
 - redis_feature_stores_example.py: Example usage for Redis feature_stores integration
 
