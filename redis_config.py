@@ -68,7 +68,7 @@ def semantic_cache_decorator(cache_instance):
                 return result
             except Exception as e:
                 logger.error(f"Error during caching operation: {e}")
-                # Fallback to executing the function if cache fails
+                # Fallback to direct function call in case of error
                 return await func(*args, **kwargs)
         return wrapper
     return decorator
